@@ -4,16 +4,15 @@ import numpy as np
 import os, pickle
 
 class HybridRetriever:
-    def __init__(self, embedding_model_name="all-mpnet-base-v2"):
-        self.model = SentenceTransformer(embedding_model_name)
+    def __init__(self, embedding_model_name="all-MiniLM-L6-v2"):
+        self.model = SentenceTransformer("all-MiniLM-L6-v2")
         self.index = None
         self.chunk_texts = []
-        self.chunk_id_map = {}  # optional: for tracking
-        self.dimension = 768
+        self.dimension = 384  # for MiniLM
 
     def build_faiss_index(self, chunks: list):
         self.chunk_texts = chunks
-        embeddings = self.model.encode(chunks, show_progress_bar=True)
+        embeddings = self.model.encode(chunks, show_progress_bar=True, batch_size=32)
         index = faiss.IndexFlatL2(self.dimension)
         index.add(np.array(embeddings).astype('float32'))
         self.index = index
@@ -30,18 +29,17 @@ class HybridRetriever:
             self.chunk_texts = pickle.load(f)
 
     def search(self, query: str, top_k=3):
-        query_vec = self.model.encode([query])
+        query_vec = self.model.encode([query], show_progress_bar=False)
         D, I = self.index.search(np.array(query_vec).astype('float32'), top_k)
         return [(self.chunk_texts[i], float(D[0][idx])) for idx, i in enumerate(I[0])]
-    
+
+
 if __name__ == "__main__":
     import glob
-    import os
-
     os.makedirs("data/embeddings/", exist_ok=True)
-
     chunk_files = glob.glob("data/processed_chunks/*.txt")
     all_chunks = []
+
     for file in chunk_files:
         with open(file, "r") as f:
             all_chunks += f.read().split("\n\n---\n\n")
