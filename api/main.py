@@ -84,16 +84,16 @@ async def run_hackrx(req: RunRequest, authorization: str = Header(...)):
 
         async def answer_question(q: str):
             try:
-                top_chunks = retriever.search(q, top_k=5)
+                top_chunks = retriever.search(q, top_k=2)
                 result = reason_over_clauses(q, top_chunks)  # Calls Gemini internally
                 logger.info(f"✅ Answered using model: {result.get('model_used')} for question: {q}")
-                return result
+                return result.get("final_answer", "Answer not available.")
             except Exception as e:
                 logger.error(f"❌ Error while answering question '{q}': {e}")
-                return {"error": str(e)}
+                return "Answer not available due to an error."
 
-        answers = await asyncio.gather(*(answer_question(q) for q in req.questions))
-        return {"answers": answers}
+        final_answers = await asyncio.gather(*(answer_question(q) for q in req.questions))
+        return {"answers": final_answers}
 
     except Exception as e:
         logger.exception("💥 Unhandled exception")
