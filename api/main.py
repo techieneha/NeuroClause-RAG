@@ -17,8 +17,8 @@ CACHE_DIR = "data/cache"
 os.makedirs(CACHE_DIR, exist_ok=True)
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-print("🔐 Expected Header:", f"Bearer {TEAM_TOKEN}")
-print("🔑 GEMINI_API_KEY loaded:", bool(GOOGLE_API_KEY))
+#print("🔐 Expected Header:", f"Bearer {TEAM_TOKEN}")
+#print("🔑 GEMINI_API_KEY loaded:", bool(GOOGLE_API_KEY))
 
 # ✅ FastAPI app setup
 app = FastAPI()
@@ -85,7 +85,7 @@ async def run_hackrx(req: RunRequest, authorization: str = Header(...)):
         async def answer_question(q: str):
             try:
                 top_chunks = retriever.search(q, top_k=2)
-                result = reason_over_clauses(q, top_chunks)  # Calls Gemini internally
+                result = await reason_over_clauses(q, top_chunks)  # Calls Gemini internally
                 logger.info(f"✅ Answered using model: {result.get('model_used')} for question: {q}")
                 return result.get("final_answer", "Answer not available.")
             except Exception as e:

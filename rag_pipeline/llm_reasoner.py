@@ -1,86 +1,87 @@
-import os
-import json
-import re
+import logging
 import time
-import csv
-from dotenv import load_dotenv
+from typing import List, Tuple, Union
+import httpx
 
-from mistralai.client import MistralClient
-from mistralai.models.chat_completion import ChatMessage
+logger = logging.getLogger(__name__)
+OLLAMA_LOCAL_URL = "http://localhost:11434/api/generate"
 
-import tiktoken  # for token counting
+# Accepts top_chunks as List[str] OR List[Tuple[float, str]] OR List[Dict]
+def format_prompt(question: str, top_chunks: List[Union[str, Tuple[float, str], dict]]) -> str:
+    formatted_chunks = []
+    for i, chunk in enumerate(top_chunks):
+        if isinstance(chunk, tuple) and isinstance(chunk[1], str):
+            formatted_chunks.append(f"[{i+1}] {chunk[1].strip()}")
+        elif isinstance(chunk, dict):
+            text = chunk.get("text", "").strip()
+            formatted_chunks.append(f"[{i+1}] {text}")
+        elif isinstance(chunk, str):
+            formatted_chunks.append(f"[{i+1}] {chunk.strip()}")
+        else:
+            logger.warning(f"❌ Unsupported chunk format: {chunk}")
+            continue
 
-# Load environment variables
-load_dotenv()
-ollama_model = os.getenv("MISTRAL_MODEL", "open-mistral-7b")
-mistral_key = os.getenv("MISTRAL_API_KEY")
-
-mistral_client = MistralClient(api_key=mistral_key)
-
-
-def clean_json_from_text(text):
-    match = re.search(r"\{.*\}", text, re.DOTALL)
-    if match:
-        try:
-            return json.loads(match.group(0))
-        except json.JSONDecodeError:
-            return {"final_answer": text.strip(), "error": "Invalid JSON returned"}
-    return {"final_answer": text.strip()}
-
-
-def count_tokens(text: str, model: str = "gpt-3.5-turbo") -> int:
-    try:
-        enc = tiktoken.encoding_for_model(model)
-    except Exception:
-        enc = tiktoken.get_encoding("cl100k_base")
-    return len(enc.encode(text))
-
-
-def log_token_usage(model: str, prompt: str, response: str):
-    prompt_tokens = count_tokens(prompt, model)
-    response_tokens = count_tokens(response, model)
-    total_tokens = prompt_tokens + response_tokens
-
-    log_path = "token_log.csv"
-    file_exists = os.path.isfile(log_path)
-
-    with open(log_path, mode="a", newline="") as f:
-        writer = csv.writer(f)
-        if not file_exists:
-            writer.writerow(["timestamp", "model", "prompt_tokens", "response_tokens", "total_tokens"])
-        writer.writerow([time.time(), model, prompt_tokens, response_tokens, total_tokens])
-
-    print(f"📊 {model} — Prompt: {prompt_tokens}, Response: {response_tokens}, Total: {total_tokens}")
-
-
-def reason_over_clauses(question: str, chunks: list) -> dict:
-    context = "\n\n".join(
-        [chunk[0] if isinstance(chunk, tuple) else str(chunk) for chunk in chunks]
-    )[:8000]
+    context = "\n\n".join(formatted_chunks)
 
     prompt = f"""
-You are a helpful insurance assistant.
+You are a health insurance policy assistant. Based on the below clauses, answer the question accurately, with reference to relevant clause numbers if helpful. Be honest if the answer is not clearly stated.
 
-Context:
-{context}
-
-Question:
+User Question:
 {question}
 
-Respond with valid JSON format:
-{{
-  "clause_summary": "...",
-  "final_answer": "...",
-  "justification": "..."
-}}
-"""
+Relevant Policy Clauses:
+{context}
+
+Respond with only the final answer.
+""".strip()
+
+    return prompt
+
+
+async def reason_over_clauses(question: str, top_chunks: List[Union[str, Tuple[float, str], dict]]) -> dict:
     try:
-        messages = [ChatMessage(role="user", content=prompt)]
-        response = mistral_client.chat(model=ollama_model, messages=messages)
-        output = response.choices[0].message.content
-        log_token_usage(ollama_model, prompt, output)
-        result = clean_json_from_text(output)
-        result["model_used"] = ollama_model
-        return result
+        prompt = format_prompt(question, top_chunks)
+        payload = {
+            "model": "mistral",
+            "prompt": prompt,
+            "stream": False,
+            "temperature": 0.1,
+            "num_predict": 200
+        }
+
+        start_time = time.time()
+        async with httpx.AsyncClient(timeout=60) as client:
+            response = await client.post(OLLAMA_LOCAL_URL, json=payload)
+        latency = time.time() - start_time
+
+        if response.status_code == 200:
+            data = response.json()
+            answer = data.get("response", "").strip()
+            prompt_tokens = len(prompt.split())
+            answer_tokens = len(answer.split())
+            total_tokens = prompt_tokens + answer_tokens
+
+            logger.info(f"📊 Mistral local — Prompt Tokens (approx): {prompt_tokens}, Answer Tokens: {answer_tokens}")
+            return {
+                "final_answer": answer,
+                "model_used": "mistral",
+                "token_usage": {
+                    "prompt_tokens": prompt_tokens,
+                    "answer_tokens": answer_tokens,
+                    "total_tokens": total_tokens
+                },
+                "latency": round(latency, 2)
+            }
+        else:
+            logger.error(f"❌ Mistral response error: {response.status_code} {response.text}")
+            return {
+                "final_answer": "Answer not available.",
+                "model_used": "mistral"
+            }
+
     except Exception as e:
-        return {"error": f"Mistral error: {str(e)}"}
+        logger.exception(f"💥 Mistral reasoning error: {e}")
+        return {
+            "final_answer": "Answer not available due to an error.",
+            "model_used": "mistral"
+        }
