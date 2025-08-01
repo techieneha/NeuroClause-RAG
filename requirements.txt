@@ -101,3 +101,16 @@ tiktoken
 mistralai
 google-generativeai
 python-dotenv
+PyPDF2
+pinecone-client>=3.0.0
+sentence-transformers
+fastapi
+uvicorn
+langchain
+langchain-community
+langchain-core
+sentence-transformers
+transformers
+faiss-cpu
+python-dotenv
+PyMuPDF
