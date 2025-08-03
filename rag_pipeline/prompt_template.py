@@ -1,20 +1,22 @@
-def build_prompt(query: str, parsed_fields: dict, relevant_clauses: list[str]) -> str:
-    prompt = f"""
-You are an expert in insurance policy interpretation. Given the user's question and relevant clauses from the policy document, answer concisely, factually, and in a single paragraph.
+from typing import List
 
-User Question:
-"{query}"
+def build_prompt(query: str, relevant_clauses: List[str]) -> str:
+    """Builds an optimized prompt for Mistral"""
+    clauses_str = "\n".join([f"### CLAUSE {i+1}:\n{clause}\n" for i, clause in enumerate(relevant_clauses)])
+    
+    return f"""<s>[INST] You are an expert insurance policy analyst. Answer the question using ONLY the provided policy clauses.
 
-Relevant Policy Clauses:
-{chr(10).join([f"- {clause}" for clause in relevant_clauses])}
+# POLICY CLAUSES:
+{clauses_str}
 
-Instructions:
-- Do NOT repeat the clauses.
-- DO answer directly with a yes/no if applicable.
-- DO justify briefly using facts from the policy.
-- DO NOT provide disclaimers.
-- DO NOT say "refer to the policy" or "consult the insurer".
-- Format the answer in **1-2 precise sentences** using facts only.
+# USER QUESTION:
+{query}
 
-Answer:"""
-    return prompt.strip()
+# ANSWER GUIDELINES:
+1. Start with YES/NO if applicable
+2. Be specific - mention amounts, durations, conditions
+3. Keep answers concise (1-2 sentences)
+4. Reference exact clause numbers when possible
+5. Never say "refer to document" or similar
+
+Provide only the factual answer: [/INST]"""

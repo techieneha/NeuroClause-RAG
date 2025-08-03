@@ -1,34 +1,50 @@
 from langchain_community.chat_models import ChatOllama
 from langchain_core.output_parsers import StrOutputParser
-from rag_pipeline.prompt_template import build_prompt
+import logging
 
-
-
-"""async def answer_with_llm(query: str, top_docs):
-    context = "\n\n".join(doc.page_content for doc in top_docs)
-
-    prompt = build_prompt(context=context, question=query)
-    llm = ChatOllama(model="mistral")
-    chain = llm | StrOutputParser()
-    response = await chain.ainvoke(prompt)
-    return response.strip()"""
-
+logger = logging.getLogger(__name__)
 
 async def answer_with_llm(query: str, top_docs):
-    # Build list of clause strings
-    relevant_clauses = [doc.page_content for doc in top_docs]
+    """Generate concise policy answers in 1-2 lines"""
+    try:
+        clauses = [doc.page_content for doc in top_docs]
+        prompt = _build_concise_prompt(query, clauses)
+        
+        llm = ChatOllama(
+            model="mistral",
+            temperature=0.1,
+            num_ctx=2048  # Reduced context for more focused answers
+        )
+        
+        chain = llm | StrOutputParser()
+        response = await chain.ainvoke(prompt)
+        return _clean_response(response)
+    
+    except Exception as e:
+        logger.error(f"LLM error: {str(e)}")
+        return "Answer unavailable."
 
-    # Build prompt using correct args
-    prompt = build_prompt(
-        query=query,
-        parsed_fields={},  # Pass an empty dict unless you have structured fields
-        relevant_clauses=relevant_clauses
-    )
+def _build_concise_prompt(query: str, clauses: list) -> str:
+    """Builds a strict prompt for 1-2 line answers"""
+    return f"""<s>[INST] You are an insurance policy expert. Answer in EXACTLY 1-2 sentences using ONLY these clauses:
+    
+{chr(10).join(clauses)}
 
-    # Load model and chain
-    llm = ChatOllama(model="mistral")
-    chain = llm | StrOutputParser()
+Question: {query}
 
-    # Run async inference
-    response = await chain.ainvoke(prompt)
-    return response.strip()
+Rules:
+1. Answer in 1-2 sentences MAX
+2. Start with Yes/No if applicable
+3. Include ONLY key details
+4. Never say "as per clause" or "refer to"
+5. Never list multiple conditions
+6. Format: [Answer]. [Optional brief condition]
+
+Answer: [/INST]"""
+
+def _clean_response(response: str) -> str:
+    """Ensures consistent answer formatting"""
+    response = response.strip()
+    if not response.endswith('.'):
+        response += '.'
+    return response
