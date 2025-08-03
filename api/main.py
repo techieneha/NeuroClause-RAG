@@ -1,28 +1,40 @@
 from fastapi import FastAPI, Header, HTTPException
 from pydantic import BaseModel
 from typing import List
-import os, logging, asyncio
+import os
+import logging
+import asyncio
 from dotenv import load_dotenv
-
-from rag_pipeline.retriever import load_pdf, embed_chunks, retrieve_with_rerank
+from rag_pipeline.retriever import load_pdf, embed_chunks, retrieve_with_rerank  # Fixed import path
 from rag_pipeline.llm_reasoner import answer_with_llm
-from rag_pipeline.prompt_template import build_prompt
-
-
 
 load_dotenv()
 TEAM_TOKEN = os.getenv("TEAM_TOKEN", "hackrx_token")
 
-logging.basicConfig(level=logging.INFO)
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
 logger = logging.getLogger(__name__)
 
-app = FastAPI()
-
+app = FastAPI(
+    title="Policy Query Engine (Local)",
+    description="RAG system using local Mistral and embeddings"
+)
 
 class RunRequest(BaseModel):
-    documents: str  # local file path or URL
+    documents: str  # PDF URL
     questions: List[str]
 
+async def process_question(q, vectorstore):
+    """Process each question with proper error handling"""
+    try:
+        top_docs = await retrieve_with_rerank(q, vectorstore)
+        return await answer_with_llm(q, top_docs)
+    except Exception as e:
+        logger.error(f"Error processing question: {str(e)}")
+        return "Answer unavailable."
 
 @app.post("/api/v1/hackrx/run")
 async def run_query(req: RunRequest, authorization: str = Header(...)):
@@ -30,16 +42,18 @@ async def run_query(req: RunRequest, authorization: str = Header(...)):
         raise HTTPException(status_code=401, detail="Invalid token")
 
     try:
-        chunks = load_pdf(req.documents)
-        vectorstore = embed_chunks(chunks)
-
-        async def process_question(q):
-            top_docs = retrieve_with_rerank(q, vectorstore)
-            return await answer_with_llm(q, top_docs)
-
-        answers = await asyncio.gather(*[process_question(q) for q in req.questions])
+        # Load and process document
+        documents = await load_pdf(req.documents)
+        vectorstore = embed_chunks(documents)
+        
+        # Process all questions in parallel
+        answers = await asyncio.gather(*[
+            process_question(q, vectorstore)
+            for q in req.questions
+        ])
+        
         return {"answers": answers}
 
     except Exception as e:
-        logger.exception("🔥 Unhandled error:")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("Processing failed")
+        raise HTTPException(500, "Query processing failed")

@@ -12,3 +12,6 @@ env/
 *.egg-info/
 data/embeddings/
 data/processed/
+ollama*
+Ollama*
+.ollama/
