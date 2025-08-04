@@ -1,0 +1,25 @@
+# Azure Container Apps Deployment Configuration
+location: eastus2
+resourceGroup: neuroclause-rg
+containerAppEnvironment: neuroclause-env
+containerApp: neuroclause-app
+
+environment:
+  variables:
+    - name: TEAM_TOKEN
+      value: your_hackrx_token_here
+    - name: PYTHONPATH
+      value: /app
+
+resources:
+  cpu: 0.25
+  memory: 0.5Gi
+
+scale:
+  minReplicas: 0
+  maxReplicas: 1
+
+ingress:
+  external: true
+  targetPort: 8000
+  transport: http
