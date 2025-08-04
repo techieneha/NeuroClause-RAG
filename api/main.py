@@ -7,6 +7,8 @@ import asyncio
 from dotenv import load_dotenv
 from rag_pipeline.retriever import load_pdf, embed_chunks, retrieve_with_rerank  # Fixed import path
 from rag_pipeline.llm_reasoner import answer_with_llm
+from fastapi import Request
+from fastapi.responses import JSONResponse
 
 load_dotenv()
 TEAM_TOKEN = os.getenv("TEAM_TOKEN", "hackrx_token")
@@ -57,3 +59,18 @@ async def run_query(req: RunRequest, authorization: str = Header(...)):
     except Exception as e:
         logger.exception("Processing failed")
         raise HTTPException(500, "Query processing failed")
+    
+
+@app.middleware("http")
+async def keepalive(request, call_next):
+    response = await call_next(request)
+    response.headers["Keep-Alive"] = "timeout=600" 
+    return response
+
+@app.get("/health")
+async def health_check():
+    return JSONResponse(
+        content={"status": "OK", "version": "1.0.0"},
+        status_code=200
+    )
+    

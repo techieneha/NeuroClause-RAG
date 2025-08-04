@@ -4,7 +4,8 @@ def build_prompt(query: str, relevant_clauses: List[str]) -> str:
     """Builds an optimized prompt for Mistral"""
     clauses_str = "\n".join([f"### CLAUSE {i+1}:\n{clause}\n" for i, clause in enumerate(relevant_clauses)])
     
-    return f"""<s>[INST] You are an expert insurance policy analyst. Answer the question using ONLY the provided policy clauses.
+    return f"""<s>[INST] You are an expert insurance policy analyst. Answer the question using ONLY the provided policy clauses.Answer ONLY with policy facts in this format:
+[Coverage Status]: [Yes/No/Partial]. [Key Details]. [Condition if any].
 
 # POLICY CLAUSES:
 {clauses_str}
