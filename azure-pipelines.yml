@@ -1,0 +1,120 @@
+# Azure DevOps Pipeline for NeuroClause-RAG
+# This pipeline builds and deploys the NeuroClause RAG application
+
+trigger:
+  branches:
+    include:
+      - main
+      - azure-setup
+  paths:
+    exclude:
+      - README.md
+      - docs/*
+      - "*.md"
+
+pr:
+  branches:
+    include:
+      - main
+  paths:
+    exclude:
+      - README.md
+      - docs/*
+      - "*.md"
+
+variables:
+  - name: pythonVersion
+    value: '3.11'
+  - name: vmImageName
+    value: 'ubuntu-latest'
+  - name: azureServiceConnection
+    value: 'NeuroClause-ServiceConnection'
+  - name: containerAppName
+    value: 'neuroclause-rag'
+  - name: resourceGroupName
+    value: 'neuroclause-rg'
+
+pool:
+  vmImage: $(vmImageName)
+
+stages:
+- stage: Build
+  displayName: 'Build and Test'
+  jobs:
+  - job: BuildJob
+    displayName: 'Build Job'
+    steps:
+    # Checkout with shallow clone (based on template evaluation output)
+    - task: 6d15af64-176c-496d-b583-fd2ae21d4df4@1
+      displayName: 'Checkout Repository'
+      inputs:
+        repository: self
+        fetchDepth: 1
+
+    - task: UsePythonVersion@0
+      displayName: 'Use Python $(pythonVersion)'
+      inputs:
+        versionSpec: '$(pythonVersion)'
+
+    - script: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+      displayName: 'Install dependencies'
+
+    - script: |
+        python -m pytest evaluate/evaluate.py -v
+      displayName: 'Run tests'
+      continueOnError: true
+
+    - script: |
+        python test.py
+      displayName: 'Run application tests'
+
+    - task: Docker@2
+      displayName: 'Build Docker image'
+      inputs:
+        command: 'build'
+        dockerfile: 'Dockerfile'
+        tags: |
+          $(Build.BuildId)
+          latest
+
+- stage: Deploy
+  displayName: 'Deploy to Azure'
+  dependsOn: Build
+  condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'))
+  jobs:
+  - deployment: DeployJob
+    displayName: 'Deploy to Azure Container Apps'
+    environment: 'production'
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          - task: 6d15af64-176c-496d-b583-fd2ae21d4df4@1
+            displayName: 'Checkout Repository'
+            inputs:
+              repository: self
+              fetchDepth: 1
+
+          - task: AzureCLI@2
+            displayName: 'Deploy to Azure Container Apps'
+            inputs:
+              azureSubscription: '$(azureServiceConnection)'
+              scriptType: 'pscore'
+              scriptLocation: 'scriptPath'
+              scriptPath: 'deploy-azure.ps1'
+              arguments: '-ResourceGroupName $(resourceGroupName) -ContainerAppName $(containerAppName)'
+
+          - task: AzureCLI@2
+            displayName: 'Verify deployment'
+            inputs:
+              azureSubscription: '$(azureServiceConnection)'
+              scriptType: 'bash'
+              scriptLocation: 'inlineScript'
+              inlineScript: |
+                az containerapp show \
+                  --name $(containerAppName) \
+                  --resource-group $(resourceGroupName) \
+                  --query "properties.latestRevisionFqdn" \
+                  --output tsv
