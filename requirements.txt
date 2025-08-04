@@ -33,11 +33,8 @@ fastjsonschema
 filelock
 frozenlist
 fsspec
-google-ai-generativelanguage
 google-api-core
 google-auth
-google-generativeai
-googleapis-common-protos
 greenlet
 grpcio
 grpcio-status
@@ -107,7 +104,7 @@ pycparser
 pydantic
 pydantic_core
 Pygments
-PyMuPDF
+PyMuPDF==1.23.7
 PyMuPDFb
 pyngrok
 pypdf
@@ -116,7 +113,6 @@ pypdfium2
 python-dateutil
 python-dotenv
 python-multipart
-pywin32
 PyYAML
 pyzmq
 referencing
