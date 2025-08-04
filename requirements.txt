@@ -8,4 +8,4 @@ faiss-cpu
 openai
 setuptools
 wheel
-
+PyMuPDF
