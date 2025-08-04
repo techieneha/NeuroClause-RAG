@@ -1,13 +1,11 @@
-fastapi==0.109.1
-uvicorn==0.27.0
-langchain==0.1.11
-langchain-community==0.0.28
-transformers==4.38.2
-sentence-transformers==2.6.1
-python-dotenv==1.0.1
-PyMuPDF==1.23.21
-ollama==0.1.4
-httpx>=0.25.2,<0.26.0  # Matches ollama's requirement
-openai
-faiss-cpu
+fastapi
+uvicorn
 pydantic
+requests
+langchain
+sentence-transformers
+faiss-cpu
+openai
+setuptools
+wheel
+
