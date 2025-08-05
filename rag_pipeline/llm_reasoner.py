@@ -7,7 +7,7 @@ from langchain_core.output_parsers import StrOutputParser
 logger = logging.getLogger(__name__)
 
 # Load config from environment (.env)
-OLLAMA_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434").rstrip("/")
+OLLAMA_URL = os.getenv("OLLAMA_BASE_URL", "https://ollama-render-1-nkhd.onrender.com").rstrip("/")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "mistral")
 
 async def answer_with_llm(query: str, top_docs):
