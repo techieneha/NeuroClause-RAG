@@ -11,3 +11,4 @@ httpx>=0.25.2,<0.26.0  # Matches ollama's requirement
 openai
 faiss-cpu
 pydantic
+simsimd
