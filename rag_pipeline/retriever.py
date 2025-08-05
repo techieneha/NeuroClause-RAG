@@ -65,7 +65,7 @@ def embed_chunks(documents: List[Any]) -> FAISS:
                 "convert_to_numpy": True,
                 "normalize_embeddings": True
             },
-            model=model  # Inject lazy-loaded model
+            
         )
 
         texts = [doc.page_content for doc in splits]
